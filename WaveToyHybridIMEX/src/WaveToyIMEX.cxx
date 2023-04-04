@@ -167,6 +167,68 @@ extern "C" void WaveToyIMEX_Sync(CCTK_ARGUMENTS) {
   // Do nothing
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+extern "C" void WaveToyIMEX_switichingIMEX_RK4(CCTK_ARGUMENTS) {
+  DECLARE_CCTK_ARGUMENTS_WaveToyIMEX_switichingIMEX_RK4;
+  DECLARE_CCTK_PARAMETERS;
+  const CCTK_REAL t = cctk_time;
+  CCTK_REAL gamma = abs(coupling_factor*sin(t*M_PI/4));
+
+  //compute jacobian
+  CCTK_REAL jacobian[4][4] = {{0,1,0,0},
+                        {pow(wave_speed_phi,2.0),0,0,0},
+                        {gamma,0,-gamma,1},
+                        {0,0,pow(wave_speed_zeta,2.0),0}};
+  const int LDA = 4;
+  const int n = 4;
+  const int LDVL = 4;
+  const int LDVR = 4;
+  const int LWORK = 100;
+  CTTK_REAL WR[4];
+  CCTK_REAL WI[4];
+  CCTK_REAL VL[4][4];
+  CCTK_REAL VR[4][4];
+  CCTK_REAL work[100];
+  int info = 0;
+  
+
+  dgeev_("N","N", &n, &jacobian[0][0],
+                             &LDA, &WR[0], &WI[0], &VL[0][0], &LDVL,
+                             &VR[0][0], &LDVR, &work[0], &LWORK, &info ); // make it return dominent Eigen value
+  assert(info == 0);
+  //output WR and WI - contains eigen values
+  for (int i = 0; i<4; i++)
+  {
+    WR[i] = abs(WR[i]);
+  }
+  CTTK_REAL dom_eig = *max_element(WR, WR + 4);
+  CTTK_REAL h_lambda = dt*dom_eig;
+  CTTK_REAL LSB = 2.785293; // this is for RK4 method , chnage this is to an if condition!
+  CCTK_REAL safety_factor = 1.079;
+  if( h_lambda >= safety_factor*LSB ) // if yes, evolve with IMEX
+  {
+    CCTK_ParameterSet("method", "ODESolvers", "IMEX_ARS343");
+  }
+  else // evolve with RK4
+  {
+    CCTK_ParameterSet("method", "ODESolvers", "RK4");
+  }
+
+
+
+
+}
+
+extern "C" void WaveToyIMEX_switichingIMEX_RK4Sync(CCTK_ARGUMENTS) {
+  DECLARE_CCTK_ARGUMENTS_WaveToyIMEX_switichingIMEX_RK4Sync;
+  DECLARE_CCTK_PARAMETERS;
+
+  // Do nothing
+}
+///////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 /////////////////////////////////////////////////////////////////////////////
 extern "C" void WaveToyIMEX_NonStiffRHS(CCTK_ARGUMENTS) {
   DECLARE_CCTK_ARGUMENTS_WaveToyIMEX_NonStiffRHS;
@@ -230,6 +292,8 @@ extern "C" void WaveToyIMEX_UserSolvedFunction_G(CCTK_ARGUMENTS) {
   // Hence, here state vector = beta
   DECLARE_CCTK_ARGUMENTS_WaveToyIMEX_UserSolvedFunction_G;
   DECLARE_CCTK_PARAMETERS;
+  const CCTK_REAL t = cctk_time;
+  CCTK_REAL gamma = abs(coupling_factor*sin(t*M_PI/4));
 
 
   const array<int, dim> indextype = {0, 0, 0};
@@ -249,7 +313,7 @@ extern "C" void WaveToyIMEX_UserSolvedFunction_G(CCTK_ARGUMENTS) {
 
     gf_phi_1(p.I) = gf_phi(p.I);
     gf_mu_1(p.I) = gf_mu(p.I);
-    gf_zeta_1(p.I) = (gf_zeta(p.I) + ODESolvers_alpha*coupling_factor*gf_phi_1(p.I))/(1 + ODESolvers_alpha*coupling_factor);
+    gf_zeta_1(p.I) = (gf_zeta(p.I) + ODESolvers_alpha*gamma*gf_phi_1(p.I))/(1 + ODESolvers_alpha*gamma);
     gf_nu_1(p.I) = gf_nu(p.I);
 
   });
@@ -266,5 +330,62 @@ extern "C" void WaveToyIMEX_UserSolvedFunction_G(CCTK_ARGUMENTS) {
 
 //////////////////////////////////////////////////////////////////////////////
 
+
+extern "C" void WaveToyIMEX_fullRHS(CCTK_ARGUMENTS) {
+  DECLARE_CCTK_ARGUMENTS_WaveToyIMEX_fullRHS;
+  DECLARE_CCTK_PARAMETERS;
+  const CCTK_REAL t = cctk_time;
+  CCTK_REAL gamma = abs(coupling_factor*sin(t*M_PI/4));
+
+
+
+  const array<int, dim> indextype = {0, 0, 0}; // use vertex coordinates
+  const GF3D2layout layout(cctkGH, indextype);
+  const GF3D2<const CCTK_REAL> gf_phi(layout,phi);
+  const GF3D2<const CCTK_REAL> gf_zeta(layout,zeta);
+  const GF3D2<const CCTK_REAL> gf_mu(layout,mu);
+  const GF3D2<const CCTK_REAL> gf_nu(layout,nu);
+
+  const GF3D2<CCTK_REAL> gf_phi_fullRHS(layout,phi_fullRHS);
+  const GF3D2<CCTK_REAL> gf_zeta_fullRHS(layout,zeta_fullRHS);
+  const GF3D2<CCTK_REAL> gf_mu_fullRHS(layout,mu_fullRHS);
+  const GF3D2<CCTK_REAL> gf_nu_fullRHS(layout,nu_fullRHS);
+
+
+  loop_int<0, 0, 0>(cctkGH, [&](const PointDesc &p) {
+
+    CCTK_REAL ddx_phi = ( -gf_phi(p.I + 2*p.DI[0]) + 16*gf_phi(p.I + p.DI[0]) - 30*gf_phi(p.I) + 
+                        16*gf_phi(p.I - p.DI[0]) - gf_phi(p.I - 2*p.DI[0]) ) / ( 12*pow(p.dx, 2) );
+
+    CCTK_REAL ddy_phi = ( -gf_phi(p.I + 2*p.DI[1]) + 16*gf_phi(p.I + p.DI[1]) - 30*gf_phi(p.I) + 
+                        16*gf_phi(p.I - p.DI[1]) - gf_phi(p.I - 2*p.DI[1]) ) / ( 12*pow(p.dx, 2) );
+
+    CCTK_REAL ddz_phi = ( -gf_phi(p.I + 2*p.DI[2]) + 16*gf_phi(p.I + p.DI[2]) - 30*gf_phi(p.I) +
+                        16*gf_phi(p.I - p.DI[2]) - gf_phi(p.I - 2*p.DI[2]) ) / ( 12*pow(p.dx, 2) );
+
+    gf_mu_fullRHS(p.I) = pow(wave_speed_phi,2) * (ddx_phi + ddy_phi + ddz_phi);
+    gf_phi_fullRHS(p.I) = gf_mu(p.I);
+
+
+    CCTK_REAL ddx_zeta = ( -gf_zeta(p.I + 2*p.DI[0]) + 16*gf_zeta(p.I + p.DI[0]) - 30*gf_zeta(p.I) + 
+			16*gf_zeta(p.I - p.DI[0]) - gf_zeta(p.I - 2*p.DI[0]) ) / ( 12*pow(p.dx, 2) );
+
+    CCTK_REAL ddy_zeta = ( -gf_zeta(p.I + 2*p.DI[1]) + 16*gf_zeta(p.I + p.DI[1]) - 30*gf_zeta(p.I) + 
+			16*gf_zeta(p.I - p.DI[1]) - gf_zeta(p.I - 2*p.DI[1]) ) / ( 12*pow(p.dx, 2) );
+
+    CCTK_REAL ddz_zeta = ( -gf_zeta(p.I + 2*p.DI[2]) + 16*gf_zeta(p.I + p.DI[2]) - 30*gf_zeta(p.I) +
+			 16*gf_zeta(p.I - p.DI[2]) - gf_zeta(p.I - 2*p.DI[2]) ) / ( 12*pow(p.dx, 2) );
+
+    gf_nu_fullRHS(p.I) = pow(wave_speed_zeta,2) * (ddx_zeta + ddy_zeta + ddz_zeta);
+    gf_zeta_fullRHS(p.I) = gf_nu(p.I) - gamma*(gf_zeta(p.I) - gf_phi(p.I));
+  });
+}
+
+extern "C" void WaveToyIMEX_fullRHSSync(CCTK_ARGUMENTS) {
+  DECLARE_CCTK_ARGUMENTS_WaveToyIMEX_fullRHSSync;
+  DECLARE_CCTK_PARAMETERS;
+
+  // Do nothing
+}
 
 } // namespace WaveToyIMEX
