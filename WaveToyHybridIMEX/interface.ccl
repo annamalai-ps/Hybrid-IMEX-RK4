@@ -35,6 +35,14 @@ CCTK_REAL UserSolvedFunction_G TYPE=gf TAGS='index={0 0 0} checkpoint="no"'
   nu_1
 } "state vector 'y1'(in explicit form) solved from implicit equation G(y1)"
 
+CCTK_REAL state TYPE=gf TAGS='index={0 0 0} rhs="fullRHS"'
+{
+  phi
+  mu
+  zeta
+  nu
+} "Scalar potential for wave equation"
+
 
 CCTK_REAL fullRHS TYPE=gf TAGS='index={0 0 0} checkpoint="no"'
 {
