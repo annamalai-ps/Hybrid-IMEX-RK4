@@ -50,6 +50,13 @@ SCHEDULE WaveToyIMEX_Sync IN WaveToyIMEX_PostStepGroup
   SYNC: state
 } "Boundary conditions for the wave equation"
 
+SCHEDULE WaveToyIMEX_switichingIMEX_RK4 IN WaveToyIMEX_InitialGroup
+{
+  LANG: C
+  OPTIONS: global
+  SYNC: state
+} "Calculate IMEX/RK4 switching conditions"
+
 SCHEDULE WaveToyIMEX_NonStiffRHS IN WaveToyIMEX_NonStiffRHSGroup
 {
   LANG: C
@@ -79,12 +86,12 @@ SCHEDULE WaveToyIMEX_fullRHS IN WaveToyIMEX_RHSGroup
   LANG: C
   READS: phi(everywhere) mu(everywhere) zeta(everywhere) nu(everywhere)
   WRITES: phi_fullRHS(interior) mu_fullRHS(interior) zeta_fullRHS(interior) nu_fullRHS(interior)
-  SYNC: rhs
+  SYNC: fullRHS
 } "Calculate full RHS for the wave equation"
 
 SCHEDULE WaveToyIMEX_fullRHSSync IN WaveToyIMEX_RHSGroup AFTER WaveToyIMEX_fullRHS
 {
   LANG: C
   OPTIONS: global
-  SYNC: rhs
+  SYNC: fullRHS
 } "Boundary conditions for the full RHS of the wave equation"

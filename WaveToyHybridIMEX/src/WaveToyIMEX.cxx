@@ -215,9 +215,6 @@ extern "C" void WaveToyIMEX_switichingIMEX_RK4(CCTK_ARGUMENTS) {
     CCTK_ParameterSet("method", "ODESolvers", "RK4");
   }
 
-
-
-
 }
 
 extern "C" void WaveToyIMEX_switichingIMEX_RK4Sync(CCTK_ARGUMENTS) {
@@ -336,8 +333,6 @@ extern "C" void WaveToyIMEX_fullRHS(CCTK_ARGUMENTS) {
   DECLARE_CCTK_PARAMETERS;
   const CCTK_REAL t = cctk_time;
   CCTK_REAL gamma = abs(coupling_factor*sin(t*M_PI/4));
-
-
 
   const array<int, dim> indextype = {0, 0, 0}; // use vertex coordinates
   const GF3D2layout layout(cctkGH, indextype);
